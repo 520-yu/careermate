@@ -7,7 +7,7 @@
 | 仓库 | 内容 |
 |---|---|
 | `careermate`（本仓库） | Spring Boot 后端：Agent、RAG、异步任务、REST/SSE 接口 |
-| `careermate-web` | Vue 3 前端：简历上传、JD 匹配、流式面试、报告展示 |
+| [`careermate-web`](https://github.com/520-yu/careermate-web) | Vue 3 前端：简历上传、JD 匹配、流式面试、报告展示 |
 
 ---
 
