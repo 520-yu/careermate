@@ -177,6 +177,17 @@ curl.exe -s --noproxy '*' http://127.0.0.1:6333/collections/careermate
 知识库灌入完成，本次共 39 条
 ```
 
+### 6. 运行测试
+
+```powershell
+mvn test
+```
+
+**27 个测试全部是纯逻辑测试，不需要启动任何外部组件** —— 不需要 API Key、不需要 Ollama、不需要 Qdrant。
+它们覆盖的正是"一旦出错就会静默降质"的那几段：Record 的越界收敛、提示词渲染、知识库 Markdown 解析。
+
+> 本项目所在机器使用自定义 Maven 仓库，需要额外传 `-s <settings.xml>`；普通环境直接 `mvn test` 即可。
+
 ---
 
 ## 接口
@@ -306,7 +317,7 @@ InterviewReport(overallScore, dimensions[{dimension, score, comment}], highlight
 - **不支持扫描件 / 图片型 PDF**。PDFBox 只能抽文本层的文字，扫描件需要 OCR（未接入）。`PdfParseTool` 会明确返回"可能是扫描件"的提示，而不是假设简历为空。
 - **简历不落库**。`/api/jd/match` 与 `/api/interview/start` 需要客户端把完整的 `ResumeProfile` 回传。一旦加简历持久化，改成传 `resumeId` 即可，Agent 侧不用改。
 - **无鉴权、无限流**。接口对外开放，任何人都能直接调用并消耗 API 额度。
-- **零单元测试**。目前只有 `mvn compile` 级别的保证，加上若干一次性验证脚本。
+- **测试覆盖有限**。已有 27 个单元测试，但只覆盖**纯逻辑**部分（Record 的越界收敛、提示词渲染、知识库 Markdown 解析）。需要真实模型与外部组件的路径（Agent 调用、RAG 检索、SSE 流式）仍未自动化测试。
 - **MySQL 尚无业务表**，只在 `/health` 里做连通性自检。
 - **简历向量化目前没有消费端**。消费者与幂等设计已就绪，但没有"按简历语义检索"的接口。
 - **模型输出有波动性**。同一简历 + 同一 JD 跑两次，`matchScore` 与 `suggestions` 会浮动。这是"让模型判断"的固有代价，不是缺陷；若要稳定，应把评分拆成可验证的子项（技能交集用规则算），只让模型写建议。
@@ -318,7 +329,7 @@ InterviewReport(overallScore, dimensions[{dimension, score, comment}], highlight
 1. **简历持久化**：MySQL 存 `ResumeProfile` 与报告，接口改传 `resumeId`
 2. **鉴权与配额**：JWT + 用户表 + 按天限额
 3. **OCR 兜底**：文本抽取质量低于阈值时降级到 OCR
-4. **补测试**：知识库解析器、RAG 检索、会话存储的往返、SSE 帧解析
+4. **扩大测试覆盖**：RAG 检索、会话存储往返、SSE 帧解析 —— 这几处需要 mock 外部依赖或引入 Testcontainers
 5. **统一异常处理**：`@RestControllerAdvice` + 业务错误码
 
 ---
