@@ -1,0 +1,98 @@
+server:
+  port: 8080
+
+  # 把异常里的 reason 写进 /error 响应体的 message 字段。
+  # Spring Boot 3 默认是 never —— 那样前端只能拿到 {timestamp,status,error,path}，
+  # 我在 Controller 里抛的 ResponseStatusException(BAD_REQUEST, "目前只支持 PDF 简历…")
+  # 那句说明会被整段丢掉，页面上只剩一个 "Bad Request"，等于没有错误信息。
+  # 生产环境若担心泄露内部细节，可改成 on_param（加 ?message=true 才显示）。
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: careermate
+
+  # ============ AI 配置 ============
+  ai:
+    # DeepSeek 走 OpenAI 兼容协议（对话模型）
+    openai:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY}
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
+      embedding:
+        enabled: false          # 关闭 OpenAI Embedding，改用 Ollama
+
+    # Ollama 本地 Embedding 模型
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        enabled: false          # 关闭 Ollama ChatModel，对话统一走 DeepSeek
+      embedding:
+        options:
+          model: nomic-embed-text
+
+    # Qdrant 向量库
+    vectorstore:
+      qdrant:
+        host: 127.0.0.1
+        port: 6334
+        collection-name: careermate
+        initialize-schema: true
+
+  # ============ MySQL ============
+  datasource:
+    url: jdbc:mysql://localhost:3306/careermate?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ============ Redis ============
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # ============ 文件上传 ============
+  servlet:
+    multipart:
+      # 默认上限只有 1MB，超限会在进入 Controller 之前就被 Tomcat 拦下，
+      # 连参数校验都跑不到，所以按简历场景放宽到 10MB。
+      max-file-size: 10MB
+      # 故意比 max-file-size 大一点：multipart 请求体除了文件本身，还包含边界串、
+      # 分段头和表单字段。两者取相等会导致「正好 10MB 的文件反而传不上去」，
+      # 报错还很难懂。
+      max-request-size: 12MB
+
+# ============ MinIO ============
+minio:
+  endpoint: http://localhost:9090
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: careermate-files
+
+# ============ RocketMQ ============
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: careermate-producer
+    endpoints: 127.0.0.1:8081
+
+# ============ 异步任务 ============
+careermate:
+  async:
+    # RocketMQ 消费者开关。
+    # 为什么需要它：消费者容器是在 context 刷新末期启动的，一旦连不上 NameServer
+    # （RemotingConnectException），失败会向上冒泡成 ApplicationContextException，
+    # 导致【整个应用启动失败】—— 而不是像普通外部依赖那样只影响自己那块功能。
+    # 所以本地只想调接口、不想起 RocketMQ 时，把它设为 false
+    # （命令行：--careermate.async.mq-enabled=false）。
+    mq-enabled: true
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    com.github.yu520.careermate: DEBUG
