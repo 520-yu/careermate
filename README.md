@@ -340,6 +340,8 @@ InterviewReport(overallScore, dimensions[{dimension, score, comment}], highlight
 
 **修法**：用 Word/WPS 的「打印 → Microsoft Print to PDF」重新导出，而不是「导出为 PDF」。快速验证方法：用 PDF 阅读器试着用鼠标选中姓名，**选不中就说明所有解析器都读不到**。
 
+**这道坑现在加了护栏**：解析结果里姓名为空时，`/api/resume/upload` 直接返回 `422 RESUME_PARSE_FAILED` 并说明原因与修法，而不是返回 200 + 一份"看起来正常、其实关键字段全空"的画像。判断依据选姓名而不是学历 —— 学历可以真的不写，姓名不会。
+
 ### 4. Vite 默认只绑 `localhost`
 
 在 Windows 上 `localhost` 解析到 IPv6 的 `::1`，导致用 `127.0.0.1:5173` 访问不到开发服务器。排查时容易被误判成"前端没起来"。

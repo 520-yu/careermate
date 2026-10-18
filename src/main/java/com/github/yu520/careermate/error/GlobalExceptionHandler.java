@@ -5,14 +5,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 全局异常出口：把任何异常都收敛成同一种 {@link ApiError} 结构。
@@ -48,6 +51,39 @@ public class GlobalExceptionHandler {
         String message = "缺少必填参数：" + ex.getParameterName();
         log.warn("[traceId={}] {}", traceId, message);
         return build(ErrorCode.INVALID_REQUEST, message, request, traceId);
+    }
+
+    /**
+     * 用错了 HTTP 方法：例如对只接受 POST 的接口发了 GET。
+     *
+     * <p>这属于调用方问题（405），**不是服务端故障**。改造前它会被下面兜底的
+     * {@code @ExceptionHandler(Exception.class)} 吃成 500，让人误以为服务端崩了 ——
+     * 而实际上服务端一点问题都没有，只是请求姿势不对。这个 bug 是真实发请求时才暴露的。
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        String traceId = newTraceId();
+        String supported = ex.getSupportedHttpMethods() == null
+                ? "其他"
+                : ex.getSupportedHttpMethods().stream().map(m -> m.name()).collect(Collectors.joining("、"));
+        String message = "该接口只接受 " + supported + " 方法，收到的是 " + ex.getMethod();
+        log.warn("[traceId={}] {}", traceId, message);
+        return build(ErrorCode.METHOD_NOT_ALLOWED, message, request, traceId);
+    }
+
+    /**
+     * 访问了不存在的路径。
+     *
+     * <p>Spring Boot 3.2 起未知路径抛 {@code NoResourceFoundException}，
+     * 不单独处理同样会被兜底的 500 吃掉，让"路径写错了"看起来像"服务端崩了"。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResource(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        String traceId = newTraceId();
+        log.warn("[traceId={}] 接口不存在：{}", traceId, ex.getResourcePath());
+        return build(ErrorCode.RESOURCE_NOT_FOUND, "接口不存在：/" + ex.getResourcePath(), request, traceId);
     }
 
     /** 参数类型不对，例如把 duration 传成了字母。 */

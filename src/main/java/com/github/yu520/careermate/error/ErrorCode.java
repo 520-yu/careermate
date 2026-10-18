@@ -25,6 +25,12 @@ public enum ErrorCode {
     /** 请求参数不合法：缺字段、类型不对、内容为空。 */
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "请求参数不合法"),
 
+    /** 访问了不存在的接口路径。 */
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "请求的接口不存在"),
+
+    /** 用错了 HTTP 方法，例如对只接受 POST 的接口发了 GET。 */
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "请求方法不被支持"),
+
     /** 上传的文件类型不支持。 */
     UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "不支持的文件类型"),
 

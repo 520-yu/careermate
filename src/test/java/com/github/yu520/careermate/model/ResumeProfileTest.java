@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -101,5 +102,25 @@ class ResumeProfileTest {
         for (String label : List.of("姓名", "学历", "技能", "项目经历", "优势", "短板")) {
             assertTrue(text.contains(label), "缺少字段标签：" + label + "，实际输出：\n" + text);
         }
+    }
+
+    @Test
+    @DisplayName("hasCoreIdentity：姓名为 null 或空白都判定为「这次解析不可用」")
+    void coreIdentityRequiresName() {
+        ResumeProfile ok = new ResumeProfile("张三", "某大学", List.of(), List.of(), List.of(), List.of());
+        ResumeProfile nullName = new ResumeProfile(null, "某大学", List.of(), List.of(), List.of(), List.of());
+        ResumeProfile blankName = new ResumeProfile("   ", "某大学", List.of(), List.of(), List.of(), List.of());
+
+        assertTrue(ok.hasCoreIdentity());
+        assertFalse(nullName.hasCoreIdentity(), "姓名为 null 说明文本提取没成功");
+        assertFalse(blankName.hasCoreIdentity(), "姓名只有空白同样不可用");
+    }
+
+    @Test
+    @DisplayName("hasCoreIdentity：学历缺失不算不可用（有人简历只写学校不写学历）")
+    void coreIdentityDoesNotRequireEducation() {
+        ResumeProfile profile = new ResumeProfile("张三", null, List.of(), List.of(), List.of(), List.of());
+
+        assertTrue(profile.hasCoreIdentity(), "只有姓名是硬性条件，学历不能当判据");
     }
 }

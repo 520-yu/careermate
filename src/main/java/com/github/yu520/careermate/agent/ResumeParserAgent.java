@@ -58,6 +58,17 @@ public class ResumeParserAgent {
         if (profile == null) {
             throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "模型未返回可解析的简历结构，请检查提示词或稍后重试");
         }
+
+        // 解析不出姓名时不能当作"解析成功"返回。
+        // 这种情况几乎都意味着 PDF 的文本层没抽出来（扫描件，或字体缺 ToUnicode 映射表），
+        // 下游拿到的会是一份"看起来正常、其实关键字段全空"的画像。
+        // 静默返回空画像是最糟的失败方式 —— 调用方无法判断是文件的问题还是服务的问题。
+        if (!profile.hasCoreIdentity()) {
+            throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED,
+                    "没能从这份 PDF 里读到候选人姓名。常见原因是这份文件是图片型扫描件，"
+                            + "或者导出的字体缺少 ToUnicode 映射表，导致文字根本无法被提取。"
+                            + "请用「打印 → Microsoft Print to PDF」重新导出，或换一份文本型 PDF 再试。");
+        }
         return profile;
     }
 }

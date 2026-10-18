@@ -2,11 +2,14 @@ package com.github.yu520.careermate.error;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -116,5 +119,31 @@ class GlobalExceptionHandlerTest {
         assertNotNull(first);
         assertNotNull(second);
         assertNotEquals(first, second);
+    }
+
+    @Test
+    @DisplayName("用错 HTTP 方法映射成 405，不能被兜底成 500")
+    void methodNotSupportedMapsTo405() {
+        HttpRequestMethodNotSupportedException ex =
+                new HttpRequestMethodNotSupportedException("GET", java.util.List.of("POST"));
+
+        ResponseEntity<ApiError> response = handler.handleMethodNotAllowed(ex, request("/api/resume/upload"));
+
+        assertEquals(405, response.getStatusCode().value(), "调用方用错方法不是服务端故障");
+        assertNotNull(response.getBody());
+        assertEquals("METHOD_NOT_ALLOWED", response.getBody().code());
+        assertTrue(response.getBody().message().contains("POST"), "应该告诉调用方正确的方法是什么");
+    }
+
+    @Test
+    @DisplayName("访问不存在的路径映射成 404，不能被兜底成 500")
+    void unknownPathMapsTo404() {
+        NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/nope");
+
+        ResponseEntity<ApiError> response = handler.handleNoResource(ex, request("/api/nope"));
+
+        assertEquals(404, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("RESOURCE_NOT_FOUND", response.getBody().code());
     }
 }
