@@ -1,13 +1,14 @@
 server:
   port: 8080
 
-  # 把异常里的 reason 写进 /error 响应体的 message 字段。
-  # Spring Boot 3 默认是 never —— 那样前端只能拿到 {timestamp,status,error,path}，
-  # 我在 Controller 里抛的 ResponseStatusException(BAD_REQUEST, "目前只支持 PDF 简历…")
-  # 那句说明会被整段丢掉，页面上只剩一个 "Bad Request"，等于没有错误信息。
-  # 生产环境若担心泄露内部细节，可改成 on_param（加 ?message=true 才显示）。
-  error:
-    include-message: always
+  # 注意：这里**故意不再设置** server.error.include-message。
+  # 之前是 always —— 因为那时每个 Controller 各自抛 ResponseStatusException，
+  # 需要它把 reason 透到 /error 响应体的 message 字段里，否则前端只看到 "Bad Request"。
+  #
+  # 现在改由 GlobalExceptionHandler（@RestControllerAdvice）统一输出 ApiError：
+  # 对外说什么由那一层决定，内部异常细节只写日志（并带 traceId 便于对照）。
+  # 所以 include-message 必须保持 Spring Boot 的默认值 never ——
+  # 若哪天它又被设成 always，等于把内部异常信息重新暴露给调用方。
 
 spring:
   application:

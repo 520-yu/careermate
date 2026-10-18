@@ -1,5 +1,8 @@
 package com.github.yu520.careermate.agent;
 
+import com.github.yu520.careermate.error.BusinessException;
+import com.github.yu520.careermate.error.ErrorCode;
+
 import com.github.yu520.careermate.model.InterviewReport;
 import com.github.yu520.careermate.model.InterviewSession;
 import com.github.yu520.careermate.model.InterviewTurn;
@@ -105,7 +108,7 @@ public class InterviewAgent {
 
         String question = interviewChatClient.prompt(prompt).call().content();
         if (question == null || question.isBlank()) {
-            throw new IllegalStateException("面试官未能生成开场问题，请稍后重试");
+            throw new BusinessException(ErrorCode.INTERVIEW_START_FAILED, "面试官未能生成开场问题，请稍后重试");
         }
         return question;
     }
@@ -155,7 +158,7 @@ public class InterviewAgent {
                 .entity(InterviewReport.class);
 
         if (report == null) {
-            throw new IllegalStateException("模型未返回可解析的评估报告，请稍后重试");
+            throw new BusinessException(ErrorCode.REPORT_GENERATE_FAILED, "模型未返回可解析的评估报告，请稍后重试");
         }
         return report;
     }

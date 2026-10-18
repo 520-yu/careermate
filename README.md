@@ -208,6 +208,34 @@ mvn test
 | POST | `/api/interview/chat` | 提交回答，**SSE 流式**返回面试官点评与追问 |
 | GET | `/api/interview/{sessionId}/report` | 评估报告（异步两阶段：`GENERATING` → `READY`） |
 
+### 错误响应（统一格式）
+
+所有非 2xx 响应都由 `GlobalExceptionHandler`（`@RestControllerAdvice`）输出同一种结构：
+
+```json
+{
+  "code": "SESSION_NOT_FOUND",
+  "message": "会话不存在或已过期（有效期 6 小时）：abc123",
+  "status": 404,
+  "path": "/api/interview/abc123/report",
+  "traceId": "f77f4670",
+  "timestamp": "2026-10-18T09:09:42.709Z"
+}
+```
+
+| 字段 | 用途 |
+|---|---|
+| `code` | 稳定的业务码（`INVALID_REQUEST` / `RESUME_PARSE_FAILED` / `REPORT_DISPATCH_FAILED` …）。前端按它分支，后端改文案不会让判断失效 |
+| `message` | 给人看的中文说明 |
+| `traceId` | 八位追踪号，**同一串也写在后端日志里**。用户报错时把它贴过来，`grep` 一次就能定位到那次请求的完整堆栈 |
+| `status` / `path` / `timestamp` | 常规上下文 |
+
+三个有意为之的设计：
+
+- **4xx 与 5xx 分开，5xx 里再细分 502 / 503 / 500**：502 = 上游模型没给出可用结果，503 = 依赖（RocketMQ）暂时不可用，500 = 我们自己的代码崩了。这三类的排查方向完全不同，混成一个"服务器错误"等于把信息丢掉。
+- **`server.error.include-message` 保持默认的 `never`**：对外说什么由 advice 决定，内部异常细节只进日志。未预期异常一律返回 `INTERNAL_ERROR` + 通用文案，绝不把堆栈或包名回给调用方。
+- **业务错误码用枚举名**：它是机器契约，永不变；中文 `message` 是给人看的，可以随时改。
+
 ### 数据模型（全部是 Java Record）
 
 ```java
@@ -354,7 +382,6 @@ InterviewReport(overallScore, dimensions[{dimension, score, comment}], highlight
 2. **鉴权与配额**：JWT + 用户表 + 按天限额
 3. **OCR 兜底**：文本抽取质量低于阈值时降级到 OCR
 4. **扩大测试覆盖**：RAG 检索、会话存储往返、SSE 帧解析 —— 这几处需要 mock 外部依赖或引入 Testcontainers
-5. **统一异常处理**：`@RestControllerAdvice` + 业务错误码
 
 ---
 

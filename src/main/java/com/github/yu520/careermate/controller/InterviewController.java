@@ -1,6 +1,8 @@
 package com.github.yu520.careermate.controller;
 
 import com.github.yu520.careermate.agent.InterviewAgent;
+import com.github.yu520.careermate.error.BusinessException;
+import com.github.yu520.careermate.error.ErrorCode;
 import com.github.yu520.careermate.model.InterviewChatRequest;
 import com.github.yu520.careermate.model.InterviewReport;
 import com.github.yu520.careermate.model.InterviewReportResponse;
@@ -10,7 +12,6 @@ import com.github.yu520.careermate.model.InterviewStartResponse;
 import com.github.yu520.careermate.model.InterviewTurn;
 import com.github.yu520.careermate.service.AsyncTaskPublisher;
 import com.github.yu520.careermate.service.InterviewSessionService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -53,11 +53,11 @@ public class InterviewController {
     @PostMapping("/start")
     public InterviewStartResponse start(@RequestBody InterviewStartRequest request) {
         if (request.resume() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "缺少 resume：请先调用 /api/resume/upload 获取简历画像");
         }
         if (request.jd() == null || request.jd().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 jd：请提供目标岗位的 JD 原文");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "缺少 jd：请提供目标岗位的 JD 原文");
         }
 
         // 检索放在开场做一次，整场复用（见 InterviewSession.referenceQuestions 的说明）。
@@ -80,7 +80,7 @@ public class InterviewController {
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> chat(@RequestBody InterviewChatRequest request) {
         if (request.message() == null || request.message().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 message：请提交候选人的回答");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "缺少 message：请提交候选人的回答");
         }
         InterviewSession session = requireSession(request.sessionId());
 
@@ -121,7 +121,7 @@ public class InterviewController {
 
         List<InterviewTurn> transcript = interviewSessionService.getTranscript(sessionId);
         if (transcript.size() < MIN_TURNS_FOR_REPORT) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "面试记录还太少（当前 %d 轮），至少完成一问一答再生成报告".formatted(transcript.size()));
         }
 
@@ -132,7 +132,7 @@ public class InterviewController {
                 && !asyncTaskPublisher.publishReportGenerate(sessionId)) {
             // 投递失败必须把标记清掉，否则用户会一直看到 GENERATING 却永远等不到结果。
             interviewSessionService.clearReportPending(sessionId);
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+            throw new BusinessException(ErrorCode.REPORT_DISPATCH_FAILED,
                     "报告生成任务投递失败（RocketMQ 可能不可用），请稍后重试");
         }
 
@@ -142,11 +142,11 @@ public class InterviewController {
     /** 取出会话，不存在（或已过期）时返回 404 而不是让后续逻辑空指针。 */
     private InterviewSession requireSession(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 sessionId");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "缺少 sessionId");
         }
         InterviewSession session = interviewSessionService.getSession(sessionId);
         if (session == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND,
                     "会话不存在或已过期（有效期 6 小时）：" + sessionId);
         }
         return session;

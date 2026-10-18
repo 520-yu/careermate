@@ -1,5 +1,8 @@
 package com.github.yu520.careermate.agent;
 
+import com.github.yu520.careermate.error.BusinessException;
+import com.github.yu520.careermate.error.ErrorCode;
+
 import com.github.yu520.careermate.model.ResumeProfile;
 import com.github.yu520.careermate.tools.PdfParseTool;
 import org.springframework.ai.chat.client.ChatClient;
@@ -53,7 +56,7 @@ public class ResumeParserAgent {
                 .entity(ResumeProfile.class);
 
         if (profile == null) {
-            throw new IllegalStateException("模型未返回可解析的简历结构，请检查提示词或稍后重试");
+            throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "模型未返回可解析的简历结构，请检查提示词或稍后重试");
         }
         return profile;
     }

@@ -1,19 +1,19 @@
 package com.github.yu520.careermate.controller;
 
 import com.github.yu520.careermate.agent.ResumeParserAgent;
+import com.github.yu520.careermate.error.BusinessException;
+import com.github.yu520.careermate.error.ErrorCode;
 import com.github.yu520.careermate.model.ResumeProfile;
 import com.github.yu520.careermate.service.ResumeStorageService;
 import com.github.yu520.careermate.service.AsyncTaskPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -48,11 +48,12 @@ public class ResumeController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResumeProfile upload(@RequestParam("file") MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "上传文件为空");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "上传文件为空");
         }
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目前只支持 PDF 简历，收到的文件名：" + filename);
+            throw new BusinessException(ErrorCode.UNSUPPORTED_FILE_TYPE,
+                    "目前只支持 PDF 简历，收到的文件名：" + filename);
         }
 
         byte[] content = file.getBytes();

@@ -1,14 +1,14 @@
 package com.github.yu520.careermate.controller;
 
 import com.github.yu520.careermate.agent.JdMatcherAgent;
+import com.github.yu520.careermate.error.BusinessException;
+import com.github.yu520.careermate.error.ErrorCode;
 import com.github.yu520.careermate.model.JdMatchRequest;
 import com.github.yu520.careermate.model.JdMatchResult;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * JD 匹配入口。
@@ -31,10 +31,11 @@ public class JdController {
     @PostMapping("/match")
     public JdMatchResult match(@RequestBody JdMatchRequest request) {
         if (request.resume() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 resume：请先调用 /api/resume/upload 获取简历画像");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "缺少 resume：请先调用 /api/resume/upload 获取简历画像");
         }
         if (request.jd() == null || request.jd().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 jd：请提供目标岗位的 JD 原文");
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "缺少 jd：请提供目标岗位的 JD 原文");
         }
         return jdMatcherAgent.match(request.resume(), request.jd());
     }
