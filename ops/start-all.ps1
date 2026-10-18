@@ -484,7 +484,7 @@ finally {
 if ($WithBackend) {
     Write-Step "7/7 后端 jar"
     $r = Start-Component -Name 'backend' -Desc 'Spring Boot 后端' `
-        -Exe 'java.exe' -Arguments @('-jar', $jar.FullName) `
+        -Exe 'java.exe' -Arguments @('-Dfile.encoding=UTF-8', '-jar', $jar.FullName) `
         -WorkingDirectory $RootDir -Port 8080 -StopMatch 'careermate'
     Confirm-Ready $r 'backend' '后端'
 

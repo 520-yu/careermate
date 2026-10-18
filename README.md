@@ -140,6 +140,7 @@ $env:DEEPSEEK_API_KEY = "sk-..."
 
 ```powershell
 # 在项目根目录执行
+$env:MAVEN_OPTS = "-Dfile.encoding=UTF-8"
 mvn spring-boot:run
 ```
 
@@ -147,8 +148,13 @@ mvn spring-boot:run
 
 ```powershell
 mvn package -DskipTests
-java -jar target/careermate-0.0.1-SNAPSHOT.jar
+java -Dfile.encoding=UTF-8 -jar target/careermate-0.0.1-SNAPSHOT.jar
 ```
+
+> **`-Dfile.encoding=UTF-8` 不是可选项。** 项目用 Java 17，而 Java 18 之前 JVM 的默认字符集取操作系统设置（中文 Windows 上是 GBK）。
+> 会话记忆的 Redis 序列化用的是默认字符集，缺了这个参数就会出现「UTF-8 写入、GBK 读回」——
+> **中文会话记忆全部乱码，表现为多轮对话失忆，而且不报任何错**。详见「踩过的坑 5」。
+> IDEA 用户：在 Run Configuration 的 VM options 里填 `-Dfile.encoding=UTF-8`。
 
 > `-DskipTests` 是必须的：`CareermateApplicationTests` 是 `@SpringBootTest`，会加载完整上下文，缺少 API Key 或任一组件不可用都会让打包失败。
 
@@ -309,6 +315,24 @@ InterviewReport(overallScore, dimensions[{dimension, score, comment}], highlight
 ### 4. Vite 默认只绑 `localhost`
 
 在 Windows 上 `localhost` 解析到 IPv6 的 `::1`，导致用 `127.0.0.1:5173` 访问不到开发服务器。排查时容易被误判成"前端没起来"。
+
+### 5. 会话记忆静默乱码：Java 17 的默认字符集是 GBK
+
+**现象**：`/api/chat` 用同一个 sessionId 连问两轮，第二轮完全不记得第一轮说过什么。日志没有任何报错，Redis 里 key 也确实写进去了。
+
+**排查路径**（每一步都排除了一个诱人但错误的假设）：
+
+1. Redis 里有 key → 写入是通的
+2. 加临时端点直接调 `ChatMemory.get(sessionId)` → 读出 4 条消息 → 存储与读取都正常
+3. 加一个 order 晚于记忆 Advisor 的捕获器，看注入后的 prompt → 历史确实被注入了
+4. 直连 DeepSeek API 发同样三条消息 → 回答正确 → **不是模型的问题**
+5. 本地起一个假端点做抓包，看真实的出站请求体 → **结构全对，但历史消息的内容是乱码，新消息却正常**
+
+**根因**：`LettuceRedisChatMemoryRepository` 内部用 `RedisTemplate` 的默认字符串序列化，字符集取的是 `Charset.defaultCharset()`。Java 18 才把默认字符集改成 UTF-8，**Java 17 在中文 Windows 上仍然是 GBK**。于是中文按 UTF-8 写进 Redis、按 GBK 读回来，全部变成 `?`。因为只是"内容坏了"而不是"流程错了"，所以没有任何异常抛出。
+
+**修法**：启动加 `-Dfile.encoding=UTF-8`（`ops/start-all.ps1` 与 IDEA 运行配置都已带上），并在 `AiConfig` 里加了一道字符集护栏 —— 默认字符集不是 UTF-8 就打 ERROR 并直接给出修复命令。
+
+**教训**：中文 + Redis + 序列化是经典组合坑，但这次它伪装成了"多轮记忆功能没实现"。**能跑通 ≠ 数据是对的** —— 如果当初只用"接口返回了内容"来验收，这个 bug 会一直留到线上。
 
 ---
 

@@ -1,6 +1,8 @@
 package com.github.yu520.careermate.config;
 
 import com.alibaba.cloud.ai.memory.redis.LettuceRedisChatMemoryRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -10,6 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+
 /**
  * 对话侧的装配。
  *
@@ -18,6 +23,8 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class AiConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
 
     /**
      * Redis 中会话记忆的 key 前缀。
@@ -44,6 +51,22 @@ public class AiConfig {
     public ChatMemoryRepository chatMemoryRepository(
             @Value("${spring.data.redis.host:localhost}") String host,
             @Value("${spring.data.redis.port:6379}") int port) {
+
+        // 字符集护栏：这个仓库内部用 RedisTemplate 的默认序列化器，而它的字符集取的正是
+        // JVM 默认字符集。Java 17 在中文 Windows 上 file.encoding 仍是 GBK（UTF-8 默认值
+        // 要 Java 18 起），于是「UTF-8 写入、GBK 读回」—— 中文会话记忆全部变成乱码，
+        // 表现出来就是「多轮对话失忆」，而且不报任何错。真实踩过，所以在这里显式拦一道。
+        Charset defaultCharset = Charset.defaultCharset();
+        if (!StandardCharsets.UTF_8.name().equalsIgnoreCase(defaultCharset.name())) {
+            log.error("""
+                    当前 JVM 默认字符集是 {}（不是 UTF-8）。
+                    LettuceRedisChatMemoryRepository 会用它做字符串序列化，导致中文会话记忆读回乱码，
+                    现象是「多轮对话失忆」且没有任何报错。请用下面的方式启动：
+                      java -Dfile.encoding=UTF-8 -jar target/careermate-0.0.1-SNAPSHOT.jar
+                    IDEA 用户在 Run Configuration 的 VM options 里加：-Dfile.encoding=UTF-8
+                    """, defaultCharset.name());
+        }
+
         return LettuceRedisChatMemoryRepository.builder()
                 .host(host)
                 .port(port)
